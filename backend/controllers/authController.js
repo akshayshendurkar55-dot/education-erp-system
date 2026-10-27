@@ -2,45 +2,54 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { findUserByUsername } = require("../models/userModel");
 
-const login = async (req, res) => {
+// Admin Login Controller Logic
+async function login(req, res) {
   try {
     const { username, password } = req.body;
 
-    // Check username
-    const user = await findUserByUsername(username);
-
-    if (!user) {
-      return res.status(401).json({
-        message: "Invalid Username",
-      });
+    // Input validation
+    if (!username || typeof username !== "string" || !username.trim()) {
+      return res.status(400).json({ message: "Username is required." });
+    }
+    if (!password || typeof password !== "string" || !password.trim()) {
+      return res.status(400).json({ message: "Password is required." });
     }
 
-    // Check password
-    const isMatch = await bcrypt.compare(password, user.password);
+    const trimmedUsername = username.trim();
+
+    // Check if user exists first
+    const user = await findUserByUsername(trimmedUsername);
+    if (!user) {
+      return res.status(401).json({ message: "Invalid Username or Password." });
+    }
+
+    // Password check (plain text or bcrypt hash)
+    let isMatch = password === user.password;
+    if (!isMatch && user.password && user.password.startsWith("$2")) {
+      isMatch = await bcrypt.compare(password, user.password);
+    }
 
     if (!isMatch) {
-      return res.status(401).json({
-        message: "Invalid Password",
-      });
+      return res.status(401).json({ message: "Invalid Username or Password." });
     }
 
-    // Check role
+    // Role check - Admin access verification
     if (user.role !== "ADMIN") {
-      return res.status(403).json({
-        message: "Access Denied",
+      return res.status(403).json({ message: "Access Denied: Admin role required." });
+    }
+
+    const secretKey = process.env.JWT_SECRET;
+    if (!secretKey) {
+      console.error("Security Configuration Error: JWT_SECRET environment variable is not defined.");
+      return res.status(500).json({
+        message: "Server Configuration Error: Authentication secret is not configured.",
       });
     }
 
-    // Generate Token
     const token = jwt.sign(
-      {
-        id: user.id,
-        role: user.role,
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "1d",
-      }
+      { id: user.id, username: user.username, role: user.role },
+      secretKey,
+      { expiresIn: "1d" }
     );
 
     res.status(200).json({
@@ -54,13 +63,31 @@ const login = async (req, res) => {
     });
 
   } catch (error) {
-    console.log(error);
-    res.status(500).json({
-      message: "Internal Server Error",
-    });
+    console.error("Auth Controller Error:", error.message);
+    res.status(500).json({ message: "Internal Server Error" });
   }
-};
+}
+
+// Current Logged-in User Profile verification
+async function getMe(req, res) {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    res.json({
+      user: {
+        id: req.user.id,
+        username: req.user.username,
+        role: req.user.role,
+      },
+    });
+  } catch (error) {
+    console.error("Auth getMe Error:", error.message);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+}
 
 module.exports = {
   login,
+  getMe,
 };

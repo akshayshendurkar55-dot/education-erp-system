@@ -1,10 +1,11 @@
 const pool = require("../config/db");
 
-const findUserByUsername = async (username) => {
-  const query = "SELECT * FROM users WHERE username = $1";
-  const result = await pool.query(query, [username]);
-  return result.rows[0];
-};
+// User fetch query for auth login check
+async function findUserByUsername(username) {
+  const sql = "SELECT * FROM users WHERE username = $1";
+  const res = await pool.query(sql, [username]);
+  return res.rows[0];
+}
 
 module.exports = {
   findUserByUsername,

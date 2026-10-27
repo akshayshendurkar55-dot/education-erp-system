@@ -28,9 +28,24 @@ app.use("/api/exams", examsRoutes);
 app.use("/api/fees", feesRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 
-// Test Route
+// Health Check Route
 app.get("/", (req, res) => {
-  res.send("Education ERP Backend is Running...");
+  res.json({
+    status: "online",
+    service: "Education ERP Backend API",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// 404 Handler for undefined routes
+app.use((req, res) => {
+  res.status(404).json({ message: "API endpoint not found." });
+});
+
+// Global Error Handler (sanitizes internal errors)
+app.use((err, req, res, next) => {
+  console.error("Unhandled Server Error:", err);
+  res.status(500).json({ message: "An unexpected error occurred. Please try again later." });
 });
 
 const PORT = process.env.PORT || 5000;
@@ -41,7 +56,7 @@ pool.connect()
     console.log("PostgreSQL Connected Successfully");
   })
   .catch((err) => {
-    console.log("Database Connection Error:", err.message);
+    console.error("Database Connection Error:", err.message);
   });
 
 app.listen(PORT, () => {
